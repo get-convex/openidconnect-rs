@@ -256,7 +256,12 @@ where
         S: SubjectIdentifierType,
     {
         let mut oauth2_client = oauth2::Client::new(client_id.clone())
-            .set_auth_uri(provider_metadata.authorization_endpoint().clone())
+            .set_auth_uri(
+                provider_metadata
+                    .authorization_endpoint()
+                    .cloned()
+                    .expect("Must have an authorization endpoint to create a client"),
+            )
             .set_token_uri_option(provider_metadata.token_endpoint().cloned());
         if let Some(ref client_secret) = client_secret {
             oauth2_client = oauth2_client.set_client_secret(client_secret.to_owned());
