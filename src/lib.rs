@@ -301,7 +301,7 @@
 //! let provider_metadata = CoreProviderMetadata::new(
 //!     // Parameters required by the OpenID Connect Discovery spec.
 //!     IssuerUrl::new("https://accounts.example.com".to_string())?,
-//!     AuthUrl::new("https://accounts.example.com/authorize".to_string())?,
+//!     Some(AuthUrl::new("https://accounts.example.com/authorize".to_string())?),
 //!     // Use the JsonWebKeySet struct to serve the JWK Set at this URL.
 //!     JsonWebKeySetUrl::new("https://accounts.example.com/jwk".to_string())?,
 //!     // Supported response types (flows).

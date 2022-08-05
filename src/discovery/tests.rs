@@ -246,12 +246,14 @@ fn test_discovery_deserialization() {
                 .to_string(),
         )
         .unwrap(),
-        AuthUrl::new(
-            "https://rp.certification.openid.net:8080/openidconnect-rs/\
+        Some(
+            AuthUrl::new(
+                "https://rp.certification.openid.net:8080/openidconnect-rs/\
                  rp-response_type-code/authorization"
-                .to_string(),
-        )
-        .unwrap(),
+                    .to_string(),
+            )
+            .unwrap(),
+        ),
         JsonWebKeySetUrl::new(
             "https://rp.certification.openid.net:8080/static/jwks_3INbZl52IrrPCp2j.json"
                 .to_string(),
@@ -419,7 +421,7 @@ fn test_discovery_deserialization() {
                 .to_string()
         )
         .unwrap(),
-        *provider_metadata.authorization_endpoint()
+        *provider_metadata.authorization_endpoint().unwrap()
     );
     assert_eq!(
         Some(
@@ -803,7 +805,7 @@ fn test_discovery_deserialization_other_fields() {
                 .to_string()
         )
         .unwrap(),
-        *provider_metadata.authorization_endpoint()
+        *provider_metadata.authorization_endpoint().unwrap()
     );
     assert_eq!(None, provider_metadata.token_endpoint());
     assert_eq!(None, provider_metadata.userinfo_endpoint());
@@ -1048,7 +1050,7 @@ fn test_unsupported_enum_values() {
                 .to_string()
         )
         .unwrap(),
-        *provider_metadata.authorization_endpoint()
+        *provider_metadata.authorization_endpoint().unwrap()
     );
     assert_eq!(None, provider_metadata.token_endpoint());
     assert_eq!(None, provider_metadata.userinfo_endpoint());
