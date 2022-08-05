@@ -62,7 +62,8 @@ where
     S: SubjectIdentifierType,
 {
     issuer: IssuerUrl,
-    authorization_endpoint: AuthUrl,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    authorization_endpoint: Option<AuthUrl>,
     token_endpoint: Option<TokenUrl>,
     userinfo_endpoint: Option<UserInfoUrl>,
     jwks_uri: JsonWebKeySetUrl,
@@ -184,7 +185,7 @@ where
     ///
     pub fn new(
         issuer: IssuerUrl,
-        authorization_endpoint: AuthUrl,
+        authorization_endpoint: Option<AuthUrl>,
         jwks_uri: JsonWebKeySetUrl,
         response_types_supported: Vec<ResponseTypes<RT>>,
         subject_types_supported: Vec<S>,
@@ -236,7 +237,7 @@ where
     field_getters_setters![
         pub self [self] ["provider metadata value"] {
             set_issuer -> issuer[IssuerUrl],
-            set_authorization_endpoint -> authorization_endpoint[AuthUrl],
+            set_authorization_endpoint -> authorization_endpoint[Option<AuthUrl>],
             set_token_endpoint -> token_endpoint[Option<TokenUrl>],
             set_userinfo_endpoint -> userinfo_endpoint[Option<UserInfoUrl>],
             set_jwks_uri -> jwks_uri[JsonWebKeySetUrl],
@@ -702,12 +703,14 @@ mod tests {
                     .to_string(),
             )
             .unwrap(),
-            AuthUrl::new(
-                "https://rp.certification.openid.net:8080/openidconnect-rs/\
+            Some(
+                AuthUrl::new(
+                    "https://rp.certification.openid.net:8080/openidconnect-rs/\
                  rp-response_type-code/authorization"
-                    .to_string(),
-            )
-            .unwrap(),
+                        .to_string(),
+                )
+                .unwrap(),
+            ),
             JsonWebKeySetUrl::new(
                 "https://rp.certification.openid.net:8080/static/jwks_3INbZl52IrrPCp2j.json"
                     .to_string(),
@@ -875,7 +878,7 @@ mod tests {
                     .to_string()
             )
             .unwrap(),
-            *provider_metadata.authorization_endpoint()
+            *provider_metadata.authorization_endpoint().unwrap()
         );
         assert_eq!(
             Some(
@@ -1259,7 +1262,7 @@ mod tests {
                     .to_string()
             )
             .unwrap(),
-            *provider_metadata.authorization_endpoint()
+            *provider_metadata.authorization_endpoint().unwrap()
         );
         assert_eq!(None, provider_metadata.token_endpoint());
         assert_eq!(None, provider_metadata.userinfo_endpoint());
@@ -1504,7 +1507,7 @@ mod tests {
                     .to_string()
             )
             .unwrap(),
-            *provider_metadata.authorization_endpoint()
+            *provider_metadata.authorization_endpoint().unwrap()
         );
         assert_eq!(None, provider_metadata.token_endpoint());
         assert_eq!(None, provider_metadata.userinfo_endpoint());
