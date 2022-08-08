@@ -67,16 +67,16 @@ where
     jwks: JsonWebKeySet<K>,
     registration_endpoint: Option<RegistrationUrl>,
     scopes_supported: Option<Vec<Scope>>,
-    #[serde(bound(deserialize = "RT: ResponseType"))]
+    #[serde(bound(deserialize = "RT: ResponseType"), default = "Vec::new")]
     response_types_supported: Vec<ResponseTypes<RT>>,
     #[serde(bound(deserialize = "RM: ResponseMode"))]
     response_modes_supported: Option<Vec<RM>>,
     #[serde(bound(deserialize = "G: GrantType"))]
     grant_types_supported: Option<Vec<G>>,
     acr_values_supported: Option<Vec<AuthenticationContextClass>>,
-    #[serde(bound(deserialize = "S: SubjectIdentifierType"))]
+    #[serde(bound(deserialize = "S: SubjectIdentifierType"), default = "Vec::new")]
     subject_types_supported: Vec<S>,
-    #[serde(bound(deserialize = "K: JsonWebKey"))]
+    #[serde(bound(deserialize = "K: JsonWebKey"), default = "Vec::new")]
     #[serde_as(as = "VecSkipError<_>")]
     id_token_signing_alg_values_supported: Vec<K::SigningAlgorithm>,
     #[serde(
