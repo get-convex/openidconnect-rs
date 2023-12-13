@@ -236,12 +236,14 @@ mod tests {
                     .to_string(),
             )
             .unwrap(),
-            AuthUrl::new(
-                "https://rp.certification.openid.net:8080/openidconnect-rs/\
-                 rp-response_type-code/authorization"
-                    .to_string(),
-            )
-            .unwrap(),
+            Some(
+                AuthUrl::new(
+                    "https://rp.certification.openid.net:8080/openidconnect-rs/\
+                     rp-response_type-code/authorization"
+                        .to_string(),
+                )
+                .unwrap(),
+            ),
             JsonWebKeySetUrl::new(
                 "https://rp.certification.openid.net:8080/static/jwks_3INbZl52IrrPCp2j.json"
                     .to_string(),
