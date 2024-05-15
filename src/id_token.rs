@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::str::FromStr;
@@ -232,6 +233,9 @@ where
     #[serde(bound = "AC: AdditionalClaims")]
     #[serde(flatten)]
     additional_claims: FilteredFlatten<StandardClaims<GC>, AC>,
+
+    #[serde(flatten)]
+    extra_claims: HashMap<String, Value>,
 }
 impl<AC, GC> IdTokenClaims<AC, GC>
 where
@@ -263,6 +267,7 @@ where
             code_hash: None,
             standard_claims,
             additional_claims: additional_claims.into(),
+            extra_claims: HashMap::new(),
         }
     }
 
@@ -334,6 +339,13 @@ where
     ///
     pub fn additional_claims_mut(&mut self) -> &mut AC {
         self.additional_claims.as_mut()
+    }
+
+    ///
+    /// Returns extra ID token claims.
+    ///
+    pub fn extra_claims(&self) -> &HashMap<String, Value> {
+        &self.extra_claims
     }
 }
 impl<AC, GC> AudiencesClaim for IdTokenClaims<AC, GC>
@@ -445,6 +457,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use oauth2::basic::BasicTokenType;
     use oauth2::{ClientId, TokenResponse};
+    use serde_json::Value;
     use url::Url;
 
     use crate::claims::{AdditionalClaims, EmptyAdditionalClaims, StandardClaims};
@@ -1177,5 +1190,27 @@ mod tests {
         }
         verify_issuer(&claims);
         verify_issuer(&&claims);
+    }
+
+    #[test]
+    fn test_extra_claims() {
+        let claims = serde_json::from_str::<IdTokenClaims<EmptyAdditionalClaims, CoreGenderClaim>>(
+            "{
+                \"iss\": \"https://server.example.com\",
+                \"sub\": \"24400320\",
+                \"aud\": [\"s6BhdRkqt3\"],
+                \"exp\": 1311281970,
+                \"iat\": 1311280970,
+                \"tfa_method\": \"u2f\",
+                \"bool_me\": true
+            }",
+        )
+        .expect("failed to deserialize");
+        let extra_claims = claims.extra_claims();
+        assert_eq!(
+            extra_claims.get("tfa_method").unwrap(),
+            &Value::String("u2f".to_owned())
+        );
+        assert_eq!(extra_claims.get("bool_me").unwrap(), &Value::Bool(true));
     }
 }
