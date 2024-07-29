@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::str::FromStr;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use oauth2::ClientId;
@@ -232,6 +233,13 @@ where
     #[serde(bound = "AC: AdditionalClaims")]
     #[serde(flatten)]
     additional_claims: FilteredFlatten<StandardClaims<GC>, AC>,
+
+    // In order to support arbitrary custom claims without knowing their types
+    // in advance (which is required for additional_claims), we pass a map of
+    // all custom claims. Note that this may also include standard claims so
+    // the caller may need to do additional filtering.
+    #[serde(flatten)]
+    custom_claims: HashMap<String, Value>,
 }
 impl<AC, GC> IdTokenClaims<AC, GC>
 where
@@ -263,6 +271,7 @@ where
             code_hash: None,
             standard_claims,
             additional_claims: additional_claims.into(),
+            custom_claims: HashMap::new(),
         }
     }
 
@@ -334,6 +343,13 @@ where
     ///
     pub fn additional_claims_mut(&mut self) -> &mut AC {
         self.additional_claims.as_mut()
+    }
+
+    ///
+    /// Returns custom ID token claims.
+    ///
+    pub fn custom_claims(&self) -> &HashMap<String, Value> {
+        &self.custom_claims
     }
 }
 impl<AC, GC> AudiencesClaim for IdTokenClaims<AC, GC>
@@ -445,6 +461,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use oauth2::basic::BasicTokenType;
     use oauth2::{ClientId, TokenResponse};
+    use serde_json::Value;
     use url::Url;
 
     use crate::claims::{AdditionalClaims, EmptyAdditionalClaims, StandardClaims};
@@ -1108,6 +1125,28 @@ mod tests {
             }",
         )
         .expect_err("missing claim should fail to deserialize");
+    }
+
+    #[test]
+    fn test_custom_claims() {
+        let claims = serde_json::from_str::<IdTokenClaims<EmptyAdditionalClaims, CoreGenderClaim>>(
+            "{
+                \"iss\": \"https://server.example.com\",
+                \"sub\": \"24400320\",
+                \"aud\": [\"s6BhdRkqt3\"],
+                \"exp\": 1311281970,
+                \"iat\": 1311280970,
+                \"tfa_method\": \"u2f\",
+                \"bool_me\": true
+            }",
+        )
+        .expect("failed to deserialize");
+        let custom_claims = claims.custom_claims();
+        assert_eq!(
+            custom_claims.get("tfa_method").unwrap(),
+            &Value::String("u2f".to_owned())
+        );
+        assert_eq!(custom_claims.get("bool_me").unwrap(), &Value::Bool(true));
     }
 
     #[derive(Debug, Deserialize, Serialize)]
