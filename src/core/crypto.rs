@@ -1,3 +1,9 @@
+use aws_lc_rs::rsa::{PublicKeyComponents, RsaParameters};
+use aws_lc_rs::signature::{
+    ParsedPublicKey, ECDSA_P256_SHA256_FIXED, ECDSA_P384_SHA384_FIXED, ECDSA_P521_SHA512_FIXED,
+    ED25519,
+};
+
 use crate::core::jwk::CoreJsonCurveType;
 use crate::core::{CoreJsonWebKey, CoreJsonWebKeyType};
 use crate::helpers::Base64UrlEncodedBytes;
@@ -72,24 +78,27 @@ fn ed_public_key(
 
 pub fn verify_rsa_signature(
     key: &CoreJsonWebKey,
-    padding: impl rsa::traits::SignatureScheme,
+    parameters: &'static RsaParameters,
     msg: &[u8],
     signature: &[u8],
 ) -> Result<(), SignatureVerificationError> {
     let (n, e) = rsa_public_key(key).map_err(SignatureVerificationError::InvalidKey)?;
-    // let's n and e as a big integers to prevent issues with leading zeros
+    // trim leading zeros from n and e;
     // according to https://datatracker.ietf.org/doc/html/rfc7518#section-6.3.1.1
     // `n` is always unsigned (hence has sign plus)
-
-    let n_bigint = rsa::BigUint::from_bytes_be(n.deref());
-    let e_bigint = rsa::BigUint::from_bytes_be(e.deref());
-    let public_key = rsa::RsaPublicKey::new(n_bigint, e_bigint)
-        .map_err(|e| SignatureVerificationError::InvalidKey(e.to_string()))?;
-
-    public_key
-        .verify(padding, msg, signature)
-        .map_err(|_| SignatureVerificationError::CryptoError("bad signature".to_string()))
+    PublicKeyComponents {
+        n: trim_bigint(&n),
+        e: trim_bigint(&e),
+    }
+    .verify(parameters, msg, signature)
+    .map_err(|_| SignatureVerificationError::CryptoError("bad signature".to_string()))
 }
+
+fn trim_bigint(x: &[u8]) -> &[u8] {
+    let prefix = x.iter().take_while(|&&byte| byte == 0).count();
+    &x[prefix..]
+}
+
 /// According to RFC5480, Section-2.2 implementations of Elliptic Curve Cryptography MUST support the uncompressed form.
 /// The first octet of the octet string indicates whether the uncompressed or compressed form is used. For the uncompressed
 /// form, the first octet has to be 0x04.
@@ -102,44 +111,32 @@ pub fn verify_ec_signature(
     msg: &[u8],
     signature: &[u8],
 ) -> Result<(), SignatureVerificationError> {
-    use p256::ecdsa::signature::Verifier;
-
     let (x, y, crv) = ec_public_key(key).map_err(SignatureVerificationError::InvalidKey)?;
     let mut pk = vec![0x04];
     pk.extend(x.deref());
     pk.extend(y.deref());
     match *crv {
         CoreJsonCurveType::P256 => {
-            let public_key = p256::ecdsa::VerifyingKey::from_sec1_bytes(&pk)
+            let public_key = ParsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, &pk)
                 .map_err(|e| SignatureVerificationError::InvalidKey(e.to_string()))?;
-            public_key
-                .verify(
-                    msg,
-                    &p256::ecdsa::Signature::from_slice(signature).map_err(|_| {
-                        SignatureVerificationError::CryptoError("Invalid signature".to_string())
-                    })?,
-                )
-                .map_err(|_| {
-                    SignatureVerificationError::CryptoError("EC Signature was wrong".to_string())
-                })
+            public_key.verify_sig(msg, signature).map_err(|_| {
+                SignatureVerificationError::CryptoError("EC Signature was wrong".to_string())
+            })
         }
         CoreJsonCurveType::P384 => {
-            let public_key = p384::ecdsa::VerifyingKey::from_sec1_bytes(&pk)
+            let public_key = ParsedPublicKey::new(&ECDSA_P384_SHA384_FIXED, &pk)
                 .map_err(|e| SignatureVerificationError::InvalidKey(e.to_string()))?;
-            public_key
-                .verify(
-                    msg,
-                    &p384::ecdsa::Signature::from_slice(signature).map_err(|_| {
-                        SignatureVerificationError::CryptoError("Invalid signature".to_string())
-                    })?,
-                )
-                .map_err(|_| {
-                    SignatureVerificationError::CryptoError("EC Signature was wrong".to_string())
-                })
+            public_key.verify_sig(msg, signature).map_err(|_| {
+                SignatureVerificationError::CryptoError("EC Signature was wrong".to_string())
+            })
         }
-        CoreJsonCurveType::P521 => Err(SignatureVerificationError::UnsupportedAlg(
-            "P521".to_string(),
-        )),
+        CoreJsonCurveType::P521 => {
+            let public_key = ParsedPublicKey::new(&ECDSA_P521_SHA512_FIXED, &pk)
+                .map_err(|e| SignatureVerificationError::InvalidKey(e.to_string()))?;
+            public_key.verify_sig(msg, signature).map_err(|_| {
+                SignatureVerificationError::CryptoError("EC Signature was wrong".to_string())
+            })
+        }
         _ => Err(SignatureVerificationError::InvalidKey(format!(
             "unrecognized curve `{crv:?}`"
         ))),
@@ -151,25 +148,17 @@ pub fn verify_ed_signature(
     msg: &[u8],
     signature: &[u8],
 ) -> Result<(), SignatureVerificationError> {
-    use ed25519_dalek::Verifier;
-
     let (x, crv) = ed_public_key(key).map_err(SignatureVerificationError::InvalidKey)?;
 
     match *crv {
         CoreJsonCurveType::Ed25519 => {
-            let public_key = ed25519_dalek::VerifyingKey::try_from(x.deref().as_slice())
-                .map_err(|e| SignatureVerificationError::InvalidKey(e.to_string()))?;
+            let public_key = ParsedPublicKey::new(&ED25519, x.as_slice()).map_err(|_| {
+                SignatureVerificationError::InvalidKey("invalid Ed25519 public key".to_string())
+            })?;
 
-            public_key
-                .verify(
-                    msg,
-                    &ed25519_dalek::Signature::from_slice(signature).map_err(|_| {
-                        SignatureVerificationError::CryptoError("invalid signature".to_string())
-                    })?,
-                )
-                .map_err(|_| {
-                    SignatureVerificationError::CryptoError("incorrect EdDSA signature".to_string())
-                })
+            public_key.verify_sig(msg, signature).map_err(|_| {
+                SignatureVerificationError::CryptoError("incorrect EdDSA signature".to_string())
+            })
         }
         _ => Err(SignatureVerificationError::InvalidKey(format!(
             "unrecognized curve `{crv:?}`"
@@ -182,9 +171,9 @@ mod tests {
     use crate::core::crypto::verify_rsa_signature;
     use crate::core::CoreJsonWebKey;
 
+    use aws_lc_rs::signature::RSA_PKCS1_2048_8192_SHA256;
     use base64::prelude::BASE64_URL_SAFE_NO_PAD;
     use base64::Engine;
-    use sha2::Digest;
 
     #[test]
     fn test_leading_zeros_are_parsed_correctly() {
@@ -203,14 +192,11 @@ mod tests {
             }
         )).unwrap();
 
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(msg);
-        let hash = hasher.finalize().to_vec();
         assert! {
             verify_rsa_signature(
                 &key,
-                rsa::Pkcs1v15Sign::new::<sha2::Sha256>(),
-                &hash,
+                &RSA_PKCS1_2048_8192_SHA256,
+                msg.as_bytes(),
                 &signature,
             ).is_ok()
         }
