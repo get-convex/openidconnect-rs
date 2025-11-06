@@ -257,15 +257,14 @@ macro_rules! new_secret_type {
         #[cfg(any(test, feature = "timing-resistant-secret-traits"))]
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
-                <sha2::Sha256 as sha2::Digest>::digest(&self.0)
-                  == <sha2::Sha256 as sha2::Digest>::digest(&other.0)
+                aws_lc_rs::constant_time::verify_slices_are_equal(&self.0.as_ref(), &other.0.as_ref()).is_ok()
             }
         }
 
         #[cfg(feature = "timing-resistant-secret-traits")]
         impl std::hash::Hash for $name {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                <sha2::Sha256 as sha2::Digest>::digest(&self.0).hash(state)
+                aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, self.0.as_ref()).as_ref().hash(state)
             }
         }
 
