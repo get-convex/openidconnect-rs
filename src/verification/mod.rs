@@ -7,10 +7,10 @@ use crate::{
     JwsSigningAlgorithm, Nonce, SubjectIdentifier,
 };
 
+use aws_lc_rs::constant_time::verify_slices_are_equal;
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use std::collections::HashSet;
@@ -503,9 +503,8 @@ impl NonceVerifier for &Nonce {
     fn verify(self, nonce: Option<&Nonce>) -> Result<(), String> {
         if let Some(claims_nonce) = nonce {
             // Avoid timing side-channel.
-            if Sha256::digest(claims_nonce.secret()) != Sha256::digest(self.secret()) {
-                return Err("nonce mismatch".to_string());
-            }
+            verify_slices_are_equal(claims_nonce.secret().as_bytes(), self.secret().as_bytes())
+                .map_err(|_| "nonce mismatch".to_string())?;
         } else {
             return Err("missing nonce claim".to_string());
         }
